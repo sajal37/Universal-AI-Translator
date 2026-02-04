@@ -1,155 +1,146 @@
-Universal Translator
-Universal Translator is a web-based application that allows users to translate text between multiple languages in real-time. The app includes user authentication and stores user accounts securely in a PostgreSQL database using Prisma ORM.
+# Universal AI Translator
 
-Features
-User authentication: Sign up and Sign in.
+Universal AI Translator is a full-stack translation app with authentication, real-time queue processing, OCR support, caching, and translation history.
 
-Secure storage of user credentials.
+## Features
 
-Text translation between multiple languages.
+- User signup/signin with JWT authentication
+- Real-time translation workflow using WebSocket + Bull queue
+- Text translation with source auto-detect support
+- OCR from images and files (image/PDF extraction + translation)
+- Redis caching for faster repeated translations
+- Translation history, favorites, and saved phrase management
+- Clean responsive UI with dark/light themes
 
-Auto-detect source language.
+## Tech Stack
 
-Real-time translation with a simple and clean interface.
+- Frontend: HTML, CSS, JavaScript
+- Backend: Node.js, Express, Socket.IO
+- Queue: Bull + Redis
+- Databases:
+  - PostgreSQL + Prisma (`User` auth model)
+  - PostgreSQL + Sequelize (translation/history models)
+- OCR and media: Tesseract.js, Sharp, pdf-parse
+- Translation: `google-translate-api-x`
+- Testing: Jest + Supertest
 
-Copy translations to clipboard.
+## Prerequisites
 
-Word count for input text.
+- Node.js 18+ (Node 20+ recommended)
+- PostgreSQL running locally or remotely
+- Redis running locally or remotely
 
-Technologies Used
-Frontend: HTML, CSS, JavaScript
+## Quick Start
 
-Backend: Node.js, Express.js
-
-Database: PostgreSQL
-
-ORM: Prisma
-
-Translation API: @vitalets/google-translate-api
-
-Installation
-Clone this repository:
-
-git clone [https://github.com/](https://github.com/)<your-username>/UniversalTranslator.git
-cd UniversalTranslator
-
-Install dependencies:
-
+```bash
+git clone https://github.com/sajal37/Universal-AI-Translator.git
+cd Universal-AI-Translator
 npm install
+```
 
-Set up PostgreSQL and create a database (e.g., translator_app).
+Create `.env` in the project root:
 
-Create a .env file in the root with:
+```env
+# App
+PORT=3000
+JWT_SECRET=replace_with_a_long_random_secret
 
-DATABASE_URL="postgres://username:password@localhost:5432/translator_app"
+# Prisma (used by auth/User model)
+DATABASE_URL=postgresql://postgres:password@localhost:5432/universal_translator
 
-Generate Prisma client:
+# Sequelize (used by translation/history models)
+DB_NAME=universal_translator
+DB_USER=postgres
+DB_PASSWORD=password
+DB_HOST=localhost
+DB_PORT=5432
 
+# Redis
+REDIS_HOST=localhost
+REDIS_PORT=6379
+# REDIS_PASSWORD=
+```
+
+Generate Prisma client and sync Prisma schema:
+
+```bash
 npx prisma generate
-
-Run database migrations (if any):
-
-npx prisma migrate dev --name init
+npx prisma db push
+```
 
 Start the server:
 
+```bash
 npm start
+```
 
-Open your browser and go to:
+App URL: `http://localhost:3000`  
+Health check: `http://localhost:3000/health`
 
-http://localhost:3000
+## Available Scripts
 
-Testing
-Run tests:
+- `npm start` - Run server
+- `npm test` - Run all tests with coverage
+- `npm run test:watch` - Run Jest in watch mode
+- `npm run test:unit` - Run unit tests
+- `npm run test:integration` - Run integration tests
+- `npm run test:functional` - Run functional tests
+- `npm run test:e2e` - Run end-to-end tests
+- `npm run test:all` - Verbose full test run
 
-npm test
+## API Overview
 
-Run tests in watch mode:
+### Auth
+- `POST /signup`
+- `POST /sign-in`
 
-npm run test:watch
+### Translation
+- `POST /translate`
+- `GET /queue/stats`
+- `GET /translation/cache`
 
-Run only unit tests:
+### OCR
+- `POST /ocr/extract` (base64 image payload)
+- `POST /ocr/translate` (base64 image payload)
+- `POST /ocr/file/extract` (multipart file)
+- `POST /ocr/file/translate` (multipart file + language)
 
-npm run test:unit
+### History
+- `GET /history`
+- `GET /history/favorites`
+- `PATCH /history/:id/favorite`
+- `DELETE /history/:id`
+- plus saved phrase and stats routes under `/history/*`
 
-Run only integration tests:
+## Project Structure
 
-npm run test:integration
+```text
+controller/      Request handlers
+middleware/      Validation and auth middleware
+routes/          Express route definitions
+services/        Cache/history/pubsub services
+queue/           Bull queue configuration and workers
+websocket/       Socket.IO handlers
+models/          Sequelize models
+config/          DB/Redis/upload/common config
+public/          Frontend files
+prisma/          Prisma schema
+__tests__/       Unit/integration/functional/e2e tests
+```
 
-For more details, see [TESTING.md](TESTING.md)
+## Troubleshooting
 
-Usage
-Sign up for a new account or sign in if you already have one.
+- If dropdown options appear blank, hard refresh the page (`Ctrl+F5`) to clear cached CSS.
+- If `/health` is degraded, verify PostgreSQL and Redis are reachable with your `.env` values.
+- If Prisma fails, re-run `npx prisma generate` and `npx prisma db push`.
 
-Enter text in the "Source Text" panel.
+## Documentation
 
-Select source and target languages.
+- `TESTING.md`
+- `FUNCTIONAL_TESTING.md`
+- `TEST_BEST_PRACTICES.md`
+- `TEST_COVERAGE.md`
 
-Click Translate to get the translation in the output panel.
+## License
 
-Copy the translation if needed.
-
-Folder Structure
-Translator/
-├── controller/         # Backend logic for routes
-├── middleware/         # Authentication and middleware
-├── routes/             # Express routes
-├── prisma/             # Prisma schema and migrations
-├── public/             # Static frontend files (HTML, CSS, JS)
-├── node_modules/
-├── .env                # Environment variables (not tracked)
-├── server.js           # Main server entry point
-├── package.json
-└── README.md
-
-License
-This project is open-source and free to use under the MIT License.
-
-Future Improvements
-Improve translation accuracy using advanced models.
-
-Add support for audio input and output.
-
-Add user history of translations.
-
-Implement password reset functionality.
-
-Configuration Files
-✅ jest.config.js - Jest configuration
-✅ jest.setup.js - Test environment setup
-✅ .env.test - Test environment variables
-✅ package.json - Updated with test scripts and dependencies
-Unit Tests (unit)
-cacheService.test.js - Cache operations
-historyService.test.js - History service
-translationController.test.js - Translation controller
-fileUploadController.test.js - File upload handling
-historyController.test.js - History controller
-middleware.test.js - Authentication middleware
-controller.test.js - User auth (signup/signin)
-translationQueue.test.js - Queue operations
-pubsubService.test.js - Pub/sub messaging
-socketHandler.test.js - WebSocket handling
-commonPhrases.test.js - Configuration
-environment.test.js - Environment validation
-
-Integration Tests (integration)
-routes.test.js - API endpoints
-health.test.js - Health checks
-cache.test.js - Cache API
-E2E Tests (e2e)
-userFlow.test.js - Complete user workflows
-Helper Files
-testUtils.js - Reusable test utilities
-mockFactory.js - Mock data generators
-Scripts
-test.js - Custom test runner
-Documentation
-TESTING.md - Testing guide
-TEST_COVERAGE.md - Coverage report
-
-npm test                  # Run all tests with coverage
-npm run test:watch       # Run in watch mode
-npm run test:unit        # Run only unit tests
-npm run test:integration # Run only integration tests
-node scripts/test.js -u  # Custom test runner for unit tests
+MIT
