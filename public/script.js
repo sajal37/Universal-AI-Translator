@@ -1,19 +1,27 @@
 let isAuthenticated = false;
 let currentUser = null;
 let socket = null;
-const inputText = document.getElementById('inputText');
-const wordCount = document.getElementById('wordCount');
+const sourceTextArea = document.getElementById('sourceTextArea');
+const sourceCharCounter = document.getElementById('sourceCharCounter');
 
 // WebSocket connection flag
 let useWebSocket = true;
 
 document.addEventListener('DOMContentLoaded', function() {
-    checkAuthStatus();
-    setupEventListeners();
-    setupThemeToggle();
+    refreshAuthState();
+    bindUiEvents();
+    initializeThemeSwitcher();
 });
 
-function setupThemeToggle() {
+function getApiMessage(data, fallbackMessage) {
+    return data?.message || data?.error || fallbackMessage;
+}
+
+function getTranslatedValue(data) {
+    return data?.translatedText || data?.translation || '';
+}
+
+function initializeThemeSwitcher() {
     const savedTheme = localStorage.getItem('theme');
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     
@@ -21,8 +29,8 @@ function setupThemeToggle() {
     const initialTheme = savedTheme || (prefersDark ? 'dark' : 'light');
     document.documentElement.setAttribute('data-theme', initialTheme);
     
-    const themeToggle = document.getElementById('themeToggle');
-    themeToggle.addEventListener('click', () => {
+    const themeSwitcher = document.getElementById('themeSwitcher');
+    themeSwitcher.addEventListener('click', () => {
         const currentTheme = document.documentElement.getAttribute('data-theme');
         const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
         
@@ -31,11 +39,11 @@ function setupThemeToggle() {
     });
 }
 
-function setupEventListeners() {
-    inputText.addEventListener('input', () => {
-        const count = inputText.value.length;
-        wordCount.textContent = `${count} / 5000`;
-        wordCount.style.color = count > 4500 ? 'rgba(255, 255, 255, 0.8)' : 'rgba(255, 255, 255, 0.4)';
+function bindUiEvents() {
+    sourceTextArea.addEventListener('input', () => {
+        const count = sourceTextArea.value.length;
+        sourceCharCounter.textContent = `${count} / 5000`;
+        sourceCharCounter.style.color = count > 4500 ? 'rgba(255, 255, 255, 0.8)' : 'rgba(255, 255, 255, 0.4)';
         
         // Emit typing event via WebSocket
         if (socket && socket.connected && isAuthenticated) {
@@ -43,9 +51,9 @@ function setupEventListeners() {
         }
     });
 
-    inputText.addEventListener('keydown', (e) => {
+    sourceTextArea.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-            translateText();
+            runTranslation();
         }
     });
 
@@ -55,53 +63,53 @@ function setupEventListeners() {
         element.addEventListener('blur', () => element.style.transform = 'scale(1)');
     });
 
-    document.getElementById('authOverlay').addEventListener('click', function(e) {
+    document.getElementById('authLayer').addEventListener('click', function(e) {
         if (e.target === this) {
-            closeWindow();
+            closeAuthLayer();
         }
     });
     
-    document.getElementById('micBtn').addEventListener('click', toggleSpeechRecognition);
+    document.getElementById('speechCaptureBtn').addEventListener('click', toggleSpeechCapture);
     
-    document.getElementById('inputLang').addEventListener('change', function() {
+    document.getElementById('fromLanguageSelect').addEventListener('change', function() {
         if (recognition && this.value !== 'auto') {
             recognition.lang = this.value;
         }
     });
 
     // Image upload functionality
-    document.getElementById('imageBtn').addEventListener('click', () => {
+    document.getElementById('ocrUploadBtn').addEventListener('click', () => {
         if (!isAuthenticated) {
-            showWindow();
+            openAuthLayer();
             return;
         }
-        document.getElementById('imageInput').click();
+        document.getElementById('ocrImageInput').click();
     });
 
-    document.getElementById('imageInput').addEventListener('change', handleImageUpload);
+    document.getElementById('ocrImageInput').addEventListener('change', handleOcrUpload);
 }
 
-function checkAuthStatus() {
+function refreshAuthState() {
     const token = localStorage.getItem('token');
     if (token) {
-        const userData = getCurrentUser(); 
+        const userData = readCurrentUser(); 
         if (userData) {
             isAuthenticated = true;
             currentUser = userData;
-            showUserInfo();
-            initializeWebSocket(token);
+            showAccountChip();
+            connectRealtimeChannel(token);
         } else {
             isAuthenticated = false;
             localStorage.removeItem('token'); 
-            hideUserInfo();
+            hideAccountChip();
         }
     } else {
         isAuthenticated = false;
-        hideUserInfo();
+        hideAccountChip();
     }
 }
 
-function getCurrentUser() {
+function readCurrentUser() {
     const userData = localStorage.getItem('currentUser');
     if (userData) {
         try {
@@ -114,83 +122,83 @@ function getCurrentUser() {
     return currentUser;
 }
 
-function showUserInfo() {
-    const userInfo = document.getElementById('userInfo');
-    const userAvatar = document.getElementById('userAvatar');
-    const userName = document.getElementById('userName');
+function showAccountChip() {
+    const accountChip = document.getElementById('accountChip');
+    const accountAvatar = document.getElementById('accountAvatar');
+    const accountName = document.getElementById('accountName');
     
     if (currentUser) {
-        userAvatar.textContent = currentUser.name.charAt(0).toUpperCase();
-        userName.textContent = currentUser.name;
-        userInfo.classList.add('active');
+        accountAvatar.textContent = currentUser.name.charAt(0).toUpperCase();
+        accountName.textContent = currentUser.name;
+        accountChip.classList.add('active');
     }
 }
 
-function hideUserInfo() {
-    document.getElementById('userInfo').classList.remove('active');
+function hideAccountChip() {
+    document.getElementById('accountChip').classList.remove('active');
 }
 
-function showWindow() {
-    const overlay = document.getElementById('authOverlay');
+function openAuthLayer() {
+    const overlay = document.getElementById('authLayer');
     overlay.classList.add('active');
     document.body.style.overflow = 'hidden';
 }
 
-function closeWindow() {
-    const overlay = document.getElementById('authOverlay');
+function closeAuthLayer() {
+    const overlay = document.getElementById('authLayer');
     overlay.classList.remove('active');
     document.body.style.overflow = 'auto';
 }
 
-function switchWindow(tab) {
-    const signinTab = document.getElementById('signinTab');
-    const signupTab = document.getElementById('signupTab');
-    const nameGroup = document.getElementById('nameGroup');
-    const confirmPasswordGroup = document.getElementById('confirmPasswordGroup');
+function switchAuthMode(tab) {
+    const signInTabBtn = document.getElementById('signInTabBtn');
+    const signUpTabBtn = document.getElementById('signUpTabBtn');
+    const signUpNameGroup = document.getElementById('signUpNameGroup');
+    const signUpConfirmGroup = document.getElementById('signUpConfirmGroup');
     
     const isSignin = tab === 'signin';
     
-    signinTab.classList.toggle('active', isSignin);
-    signupTab.classList.toggle('active', !isSignin);
+    signInTabBtn.classList.toggle('active', isSignin);
+    signUpTabBtn.classList.toggle('active', !isSignin);
     
-    document.getElementById('authTitle').textContent = isSignin ? 'Welcome Back' : 'Create Account';
-    document.getElementById('authSubtitle').textContent = isSignin ? 'Sign in to access the translator' : 'Sign up to start translating';
-    document.getElementById('authSubmitBtn').textContent = isSignin ? 'Sign In' : 'Sign Up';
+    document.getElementById('authModalTitle').textContent = isSignin ? 'Welcome back' : 'Create account';
+    document.getElementById('authModalSubtitle').textContent = isSignin ? 'Log in to keep translating' : 'Create an account to save your progress';
+    document.getElementById('authSubmitAction').textContent = isSignin ? 'Sign In' : 'Sign Up';
     
-    nameGroup.style.display = isSignin ? 'none' : 'block';
-    confirmPasswordGroup.style.display = isSignin ? 'none' : 'block';
-    document.getElementById('forgotLink').style.display = isSignin ? 'block' : 'none';
+    signUpNameGroup.style.display = isSignin ? 'none' : 'block';
+    signUpConfirmGroup.style.display = isSignin ? 'none' : 'block';
+    document.getElementById('passwordHelpLink').style.display = isSignin ? 'block' : 'none';
     
-    document.getElementById('nameInput').required = !isSignin;
-    document.getElementById('confirmPasswordInput').required = !isSignin;
+    document.getElementById('signUpNameInput').required = !isSignin;
+    document.getElementById('signUpConfirmInput').required = !isSignin;
 }
 
-async function signUpAndSignIn(event) {
+async function handleAuthSubmit(event) {
     event.preventDefault();
 
-    const isSignUp = document.getElementById('signupTab').classList.contains('active');
-    const email = document.getElementById('emailInput').value.trim();
-    const password = document.getElementById('passwordInput').value.trim();
-    const name = document.getElementById('nameInput').value.trim();
-    const confirmPassword = document.getElementById('confirmPasswordInput').value.trim();
-    const submitBtn = document.getElementById('authSubmitBtn');
+    const isSignUp = document.getElementById('signUpTabBtn').classList.contains('active');
+    const email = document.getElementById('authEmailInput').value.trim();
+    const password = document.getElementById('authPasswordInput').value.trim();
+    const name = document.getElementById('signUpNameInput').value.trim();
+    const confirmPassword = document.getElementById('signUpConfirmInput').value.trim();
+    const submitBtn = document.getElementById('authSubmitAction');
 
     if (!email || !password || (isSignUp && (!name || !confirmPassword))) {
-        alert('Please fill all required fields');
+        alert('Please complete all required fields.');
         return;
     }
 
     if (password.length < 6) {
-        alert('Password must be at least 6 characters long');
+        alert('Password must be at least 6 characters long.');
         return;
     }
 
     if (isSignUp && password !== confirmPassword) {
-        alert('Passwords do not match');
+        alert('Password and confirmation do not match.');
         return;
     }
 
-    submitBtn.textContent = isSignUp ? 'Creating Account...' : 'Signing In...';
+    submitBtn.textContent = isSignUp ? 'Creating account...' : 'Signing in...';
     submitBtn.disabled = true;
 
     try {
@@ -214,36 +222,36 @@ async function signUpAndSignIn(event) {
             localStorage.setItem('currentUser', JSON.stringify(data.user)); 
             currentUser = data.user;
             isAuthenticated = true;
-            showUserInfo();
-            closeWindow();
-            clearAuthForm();
+            showAccountChip();
+            closeAuthLayer();
+            resetAuthForm();
             
             // Initialize WebSocket after authentication
-            initializeWebSocket(token);
+            connectRealtimeChannel(token);
         } else {
-            alert(data.message || 'Authentication failed');
+            alert(getApiMessage(data, 'Authentication failed.'));
         }
     } catch (err) {
         console.error(err);
-        alert('Error connecting to server');
+        alert('Could not reach the server. Please try again.');
     }
 
     submitBtn.textContent = isSignUp ? 'Sign Up' : 'Sign In';
     submitBtn.disabled = false;
 }
 
-function clearAuthForm() {
+function resetAuthForm() {
     document.getElementById('authForm').reset();
 }
 
 function logout() {
-    if (confirm('Are you sure you want to logout?')) {
+    if (confirm('Log out from this browser session?')) {
         isAuthenticated = false;
         currentUser = null;
         localStorage.removeItem('token'); 
         localStorage.removeItem('currentUser'); 
-        hideUserInfo();
-        clearText();
+        hideAccountChip();
+        clearWorkspaceText();
         
         // Disconnect WebSocket
         if (socket) {
@@ -253,12 +261,12 @@ function logout() {
     }
 }
 
-function showForgotPassword() {
-    alert('Password reset functionality would be implemented in a real app.');
+function showPasswordHelp() {
+    alert('Password reset is not available yet.');
 }
 
 // WebSocket initialization
-function initializeWebSocket(token) {
+function connectRealtimeChannel(token) {
     if (!token) return;
     
     // Load Socket.IO client
@@ -288,17 +296,17 @@ function initializeWebSocket(token) {
         // Handle translation queued
         socket.on('translation:queued', (data) => {
             console.log('Translation queued:', data);
-            const output = document.getElementById('outputText');
-            output.value = 'Translation in progress...';
+            const output = document.getElementById('translatedTextArea');
+            output.value = 'Working on your translation...';
         });
         
         // Handle translation completed
         socket.on('translation:completed', (data) => {
             console.log('Translation completed:', data);
-            const output = document.getElementById('outputText');
-            output.value = data.translatedText;
+            const output = document.getElementById('translatedTextArea');
+            output.value = getTranslatedValue(data);
             
-            const btn = document.getElementById('translateBtn');
+            const btn = document.getElementById('runTranslationBtn');
             btn.textContent = 'Translate';
             btn.disabled = false;
             btn.style.opacity = '1';
@@ -311,12 +319,12 @@ function initializeWebSocket(token) {
         // Handle translation error
         socket.on('translation:error', (data) => {
             console.error('Translation error:', data.message);
-            alert(data.message);
+            alert(getApiMessage(data, 'Translation failed.'));
             
-            const output = document.getElementById('outputText');
+            const output = document.getElementById('translatedTextArea');
             output.value = '';
             
-            const btn = document.getElementById('translateBtn');
+            const btn = document.getElementById('runTranslationBtn');
             btn.textContent = 'Translate';
             btn.disabled = false;
             btn.style.opacity = '1';
@@ -346,41 +354,41 @@ function initializeWebSocket(token) {
 }
 
 // Handle image upload and OCR
-async function handleImageUpload(event) {
+async function handleOcrUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
 
     // Validate file type
     if (!file.type.startsWith('image/')) {
-        alert('Please upload a valid image file');
+        alert('Please upload a valid image file.');
         return;
     }
 
     // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
-        alert('Image size must be less than 5MB');
+        alert('Image size must be less than 5 MB.');
         return;
     }
 
-    const imageBtn = document.getElementById('imageBtn');
-    const outputText = document.getElementById('outputText');
+    const ocrUploadBtn = document.getElementById('ocrUploadBtn');
+    const translatedTextArea = document.getElementById('translatedTextArea');
     
-    imageBtn.classList.add('processing');
-    imageBtn.title = 'Processing image...';
+    ocrUploadBtn.classList.add('processing');
+    ocrUploadBtn.title = 'Processing image...';
     
     // Show processing message
-    outputText.value = 'Extracting text from image...';
-    outputText.classList.add('loading');
+    translatedTextArea.value = 'Reading text from image...';
+    translatedTextArea.classList.add('loading');
 
     try {
         // Convert image to base64
-        const base64Image = await fileToBase64(file);
+        const base64Image = await fileToDataUrl(file);
 
         // Extract text and translate in one step
         const token = localStorage.getItem('token');
-        const targetLanguage = document.getElementById('outputLang')?.value || 'en';
+        const targetLanguage = document.getElementById('toLanguageSelect')?.value || 'en';
 
-        outputText.value = 'Translating extracted text...';
+        translatedTextArea.value = 'Translating extracted text...';
 
         const response = await fetch('/ocr/translate', {
             method: 'POST',
@@ -398,44 +406,44 @@ async function handleImageUpload(event) {
 
         if (response.ok) {
             // Display extracted text in input
-            inputText.value = data.extractedText;
-            inputText.dispatchEvent(new Event('input'));
+            sourceTextArea.value = data.extractedText;
+            sourceTextArea.dispatchEvent(new Event('input'));
 
             // Display translation in output
-            outputText.value = data.translatedText;
-            outputText.classList.remove('loading');
+            translatedTextArea.value = getTranslatedValue(data);
+            translatedTextArea.classList.remove('loading');
 
             // Visual feedback
-            outputText.style.transform = 'scale(1.01)';
-            setTimeout(() => { outputText.style.transform = 'scale(1)'; }, 300);
+            translatedTextArea.style.transform = 'scale(1.01)';
+            setTimeout(() => { translatedTextArea.style.transform = 'scale(1)'; }, 300);
 
             // Show confidence if low
             if (data.ocrConfidence < 70) {
                 console.warn(`Low OCR confidence: ${data.ocrConfidence}%`);
-                alert(`Text extracted with ${data.ocrConfidence}% confidence. The result may not be accurate. Please verify the extracted text.`);
+                alert(`OCR confidence is ${data.ocrConfidence}%. Please quickly verify the extracted text.`);
             } else {
                 console.log(`OCR Confidence: ${data.ocrConfidence}%`);
             }
         } else {
-            outputText.value = '';
-            outputText.classList.remove('loading');
-            alert(data.message || 'Failed to process image');
+            translatedTextArea.value = '';
+            translatedTextArea.classList.remove('loading');
+            alert(getApiMessage(data, 'Could not process the image.'));
         }
     } catch (err) {
         console.error('Image processing error:', err);
-        outputText.value = '';
-        outputText.classList.remove('loading');
-        alert('Error processing image. Please try again.');
+        translatedTextArea.value = '';
+        translatedTextArea.classList.remove('loading');
+        alert('Image processing failed. Please try again.');
     } finally {
-        imageBtn.classList.remove('processing');
-        imageBtn.title = 'Upload image with text';
+        ocrUploadBtn.classList.remove('processing');
+        ocrUploadBtn.title = 'Upload image with text';
         // Reset file input
         event.target.value = '';
     }
 }
 
 // Convert file to base64
-function fileToBase64(file) {
+function fileToDataUrl(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result);
@@ -444,16 +452,16 @@ function fileToBase64(file) {
     });
 }
 
-async function translateText() {
+async function runTranslation() {
     if (!isAuthenticated) {
-        showWindow();
+        openAuthLayer();
         return;
     }
 
-    const input = inputText.value.trim();
-    const output = document.getElementById('outputText');
-    const btn = document.getElementById('translateBtn');
-    const targetLanguage = document.getElementById('outputLang')?.value || 'en';
+    const input = sourceTextArea.value.trim();
+    const output = document.getElementById('translatedTextArea');
+    const btn = document.getElementById('runTranslationBtn');
+    const targetLanguage = document.getElementById('toLanguageSelect')?.value || 'en';
 
     if (!input) {
         output.value = '';
@@ -476,7 +484,7 @@ async function translateText() {
     try {
         const token = localStorage.getItem('token');
         if (!token) {
-            showWindow();
+            openAuthLayer();
             return;
         }
 
@@ -492,19 +500,19 @@ async function translateText() {
         const data = await response.json();
 
         if (response.ok) {
-            output.value = data.translatedText; 
+            output.value = getTranslatedValue(data);
         } else {
             output.value = '';
             if (response.status === 401) {
                 logout();
-                showWindow();
+                openAuthLayer();
             } else {
-                alert(data.message || 'Translation failed');
+                alert(getApiMessage(data, 'Translation failed.'));
             }
         }
     } catch (err) {
         output.value = '';
-        alert('Error connecting to server');
+        alert('Could not reach the server. Please try again.');
         console.error(err);
     }
 
@@ -517,32 +525,32 @@ async function translateText() {
     setTimeout(() => { output.style.transform = 'scale(1)'; }, 300);
 }
 
-function clearText() {
-    inputText.value = '';
-    document.getElementById('outputText').value = '';
-    wordCount.textContent = '0 / 5000';
-    wordCount.style.color = 'rgba(255, 255, 255, 0.4)';
+function clearWorkspaceText() {
+    sourceTextArea.value = '';
+    document.getElementById('translatedTextArea').value = '';
+    sourceCharCounter.textContent = '0 / 5000';
+    sourceCharCounter.style.color = 'rgba(255, 255, 255, 0.4)';
 }
 
-function copyTranslation() {
+function copyTranslatedText() {
     if (!isAuthenticated) {
-        showWindow();
+        openAuthLayer();
         return;
     }
     
-    const output = document.getElementById('outputText');
-    const copyBtn = document.getElementById('copyBtn');
+    const output = document.getElementById('translatedTextArea');
+    const resultCopyBtn = document.getElementById('resultCopyBtn');
     
     if (output.value) {
         navigator.clipboard.writeText(output.value).then(() => {
-            copyBtn.textContent = 'Copied';
-            copyBtn.style.background = 'rgba(255, 255, 255, 0.15)';
-            copyBtn.style.color = '#ffffff';
+            resultCopyBtn.textContent = 'Copied';
+            resultCopyBtn.style.background = 'rgba(255, 255, 255, 0.15)';
+            resultCopyBtn.style.color = '#ffffff';
             
             setTimeout(() => {
-                copyBtn.textContent = 'Copy';
-                copyBtn.style.background = 'rgba(255, 255, 255, 0.06)';
-                copyBtn.style.color = 'rgba(255, 255, 255, 0.8)';
+                resultCopyBtn.textContent = 'Copy';
+                resultCopyBtn.style.background = 'rgba(255, 255, 255, 0.06)';
+                resultCopyBtn.style.color = 'rgba(255, 255, 255, 0.8)';
             }, 2000);
         });
     }
@@ -552,7 +560,7 @@ function copyTranslation() {
 let recognition = null;
 let isListening = false;
 
-function initSpeechRecognition() {
+function initializeSpeechRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     
     if (SpeechRecognition) {
@@ -563,9 +571,9 @@ function initSpeechRecognition() {
         
         recognition.onstart = () => {
             isListening = true;
-            const micBtn = document.getElementById('micBtn');
-            micBtn.classList.add('listening');
-            micBtn.title = 'Stop listening';
+            const speechCaptureBtn = document.getElementById('speechCaptureBtn');
+            speechCaptureBtn.classList.add('listening');
+            speechCaptureBtn.title = 'Stop listening';
         };
         
         recognition.onresult = (event) => {
@@ -574,23 +582,23 @@ function initSpeechRecognition() {
                 .map(result => result.transcript)
                 .join('');
                 
-            inputText.value = transcript;
-            inputText.dispatchEvent(new Event('input'));
+            sourceTextArea.value = transcript;
+            sourceTextArea.dispatchEvent(new Event('input'));
         };
         
         recognition.onend = () => {
             isListening = false;
-            const micBtn = document.getElementById('micBtn');
-            micBtn.classList.remove('listening');
-            micBtn.title = 'Speech to text';
+            const speechCaptureBtn = document.getElementById('speechCaptureBtn');
+            speechCaptureBtn.classList.remove('listening');
+            speechCaptureBtn.title = 'Speech to text';
         };
         
         recognition.onerror = (event) => {
             console.error('Speech recognition error', event.error);
             isListening = false;
-            const micBtn = document.getElementById('micBtn');
-            micBtn.classList.remove('listening');
-            micBtn.title = 'Speech to text';
+            const speechCaptureBtn = document.getElementById('speechCaptureBtn');
+            speechCaptureBtn.classList.remove('listening');
+            speechCaptureBtn.title = 'Speech to text';
             
             if (event.error === 'not-allowed') {
                 alert('Microphone permission denied. Please allow microphone access to use speech recognition.');
@@ -604,23 +612,23 @@ function initSpeechRecognition() {
     }
 }
 
-function toggleSpeechRecognition() {
+function toggleSpeechCapture() {
     if (!isAuthenticated) {
-        showWindow();
+        openAuthLayer();
         return;
     }
     
-    if (!recognition && !initSpeechRecognition()) {
-        alert('Speech recognition is not supported in your browser. Try Chrome, Edge, or Safari.');
+    if (!recognition && !initializeSpeechRecognition()) {
+        alert('Speech recognition is not supported in this browser. Try Chrome, Edge, or Safari.');
         return;
     }
     
     if (isListening) {
         recognition.stop();
     } else {
-        const inputLang = document.getElementById('inputLang').value;
-        if (inputLang !== 'auto') {
-            recognition.lang = inputLang;
+        const fromLanguageSelect = document.getElementById('fromLanguageSelect').value;
+        if (fromLanguageSelect !== 'auto') {
+            recognition.lang = fromLanguageSelect;
         }
         
         try {
