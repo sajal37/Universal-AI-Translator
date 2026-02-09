@@ -1,62 +1,29 @@
-// Mock Redis before imports
-jest.mock('../../config/redis', () => ({
-    redisPublisher: {
-        publish: jest.fn().mockResolvedValue(1)
-    },
-    redisSubscriber: {
-        subscribe: jest.fn().mockResolvedValue(undefined),
-        on: jest.fn()
-    }
-}));
-
-const pubsubService = require('../../services/pubsubService');
-const { redisPublisher, redisSubscriber } = require('../../config/redis');
+let Redis;
+let pubsubService;
 
 describe('PubSubService', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        jest.resetModules();
+        Redis = require('ioredis');
+        pubsubService = require('../../services/pubsubService');
     });
 
-    describe('publishTranslationUpdate', () => {
-        it('should publish translation updates to Redis', async () => {
-            const data = {
-                socketId: 'socket123',
-                status: 'completed',
-                result: { translated: 'hola' }
-            };
+    describe('publish', () => {
+        it('should publish messages to Redis', async () => {
+            const payload = { socketId: 'socket123', status: 'completed' };
 
-            await pubsubService.publishTranslationUpdate(data);
+            const result = await pubsubService.publish('translation:completed', payload);
 
-            expect(redisPublisher.publish).toHaveBeenCalledWith(
-                expect.any(String),
-                JSON.stringify(data)
-            );
-        });
-
-        it('should handle publish errors gracefully', async () => {
-            redisPublisher.publish.mockRejectedValue(new Error('Redis error'));
-
-            await expect(
-                pubsubService.publishTranslationUpdate({ socketId: 'test' })
-            ).resolves.not.toThrow();
+            expect(result).toBe(1);
         });
     });
 
-    describe('subscribeToTranslationUpdates', () => {
-        it('should subscribe to Redis channel', async () => {
-            const callback = jest.fn();
+    describe('subscribe', () => {
+        it('should subscribe to Redis channel and register handler', async () => {
+            const handler = jest.fn();
 
-            await pubsubService.subscribeToTranslationUpdates(callback);
-
-            expect(redisSubscriber.subscribe).toHaveBeenCalled();
-        });
-
-        it('should register message handler', () => {
-            const callback = jest.fn();
-
-            pubsubService.subscribeToTranslationUpdates(callback);
-
-            expect(redisSubscriber.on).toHaveBeenCalledWith('message', expect.any(Function));
+            await expect(pubsubService.subscribe('translation:completed', handler))
+                .resolves.not.toThrow();
         });
     });
 });

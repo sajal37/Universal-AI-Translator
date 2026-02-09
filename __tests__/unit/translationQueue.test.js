@@ -76,6 +76,10 @@ describe('TranslationQueue', () => {
 
     describe('Queue Configuration', () => {
         it('should configure queue with Redis connection', () => {
+            Queue.mockClear();
+            jest.isolateModules(() => {
+                require('../../queue/translationQueue');
+            });
             expect(Queue).toHaveBeenCalledWith(
                 expect.any(String),
                 expect.objectContaining({
@@ -88,6 +92,10 @@ describe('TranslationQueue', () => {
         });
 
         it('should set default job options', () => {
+            Queue.mockClear();
+            jest.isolateModules(() => {
+                require('../../queue/translationQueue');
+            });
             expect(Queue).toHaveBeenCalledWith(
                 expect.any(String),
                 expect.objectContaining({

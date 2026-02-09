@@ -2,14 +2,15 @@ const request = require('supertest');
 const express = require('express');
 
 // Mock setup
-jest.mock('../../config/redis', () => ({
-    redisClient: {
-        keys: jest.fn().mockResolvedValue(['key1', 'key2']),
-        get: jest.fn().mockResolvedValue(JSON.stringify({ translated: 'test' })),
-        del: jest.fn().mockResolvedValue(1),
-        flushall: jest.fn().mockResolvedValue('OK'),
-        info: jest.fn().mockResolvedValue('# Stats\r\nused_memory:1000000\r\n')
-    }
+jest.mock('../../middleware/middleware', () => ({
+    checkUser: (req, res, next) => next()
+}));
+
+jest.mock('../../services/cacheService', () => ({
+    getStats: jest.fn().mockResolvedValue({ hits: 10, misses: 2 }),
+    getPopular: jest.fn().mockResolvedValue([]),
+    clear: jest.fn().mockResolvedValue(3),
+    preloadCommon: jest.fn().mockResolvedValue(2)
 }));
 
 const cacheRoutes = require('../../routes/cacheRoutes');
@@ -23,23 +24,23 @@ describe('Cache API Integration Tests', () => {
         jest.clearAllMocks();
     });
 
-    describe('GET /cache/keys', () => {
-        it('should list all cache keys', async () => {
-            const response = await request(app).get('/cache/keys');
-
-            expect(response.status).toBe(200);
-            expect(response.body).toHaveProperty('success', true);
-            expect(response.body).toHaveProperty('keys');
-            expect(Array.isArray(response.body.keys)).toBe(true);
-        });
-    });
-
     describe('GET /cache/stats', () => {
         it('should return cache statistics', async () => {
             const response = await request(app).get('/cache/stats');
 
             expect(response.status).toBe(200);
-            expect(response.body).toHaveProperty('success');
+            expect(response.body).toHaveProperty('success', true);
+            expect(response.body).toHaveProperty('stats');
+        });
+    });
+
+    describe('GET /cache/popular', () => {
+        it('should return popular translations', async () => {
+            const response = await request(app).get('/cache/popular');
+
+            expect(response.status).toBe(200);
+            expect(response.body).toHaveProperty('success', true);
+            expect(response.body).toHaveProperty('popular');
         });
     });
 
@@ -49,15 +50,19 @@ describe('Cache API Integration Tests', () => {
 
             expect(response.status).toBe(200);
             expect(response.body).toHaveProperty('success', true);
+            expect(response.body).toHaveProperty('cleared');
         });
     });
 
-    describe('DELETE /cache/:key', () => {
-        it('should delete a specific cache key', async () => {
-            const response = await request(app).delete('/cache/test:key:123');
+    describe('POST /cache/preload', () => {
+        it('should preload common phrases', async () => {
+            const response = await request(app)
+                .post('/cache/preload')
+                .send({ phrases: [{ source: 'en', target: 'es', text: 'hello' }] });
 
             expect(response.status).toBe(200);
             expect(response.body).toHaveProperty('success', true);
+            expect(response.body).toHaveProperty('loaded');
         });
     });
 });

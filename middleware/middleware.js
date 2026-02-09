@@ -1,14 +1,17 @@
 const jwt = require('jsonwebtoken');
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../config/prismaClient');
+const { requireJwtSecret } = require('../config/jwt');
 
-const JWT_SECRET = process.env.JWT_SECRET || "9f4a7d3a4c0e8a7d1d61caa42a87dfc1454c1a2c19f7075e69f49c842dbd8c3c";
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function checkSignUp(req, res, next) {
     const { name, email, password, confirmPassword } = req.body;
 
     if (!name || !email || !password || !confirmPassword) {
         return res.status(400).json({ message: 'All fields are required' });
+    }
+    if (!emailPattern.test(email)) {
+        return res.status(400).json({ message: 'Invalid email format' });
     }
     if (password.length < 6) {
         return res.status(400).json({ message: 'Password must be at least 6 characters long' });
@@ -25,6 +28,9 @@ function checkSignIn(req, res, next) {
     if (!email || !password) {
         return res.status(400).json({ message: 'Email and password are required' });
     }
+    if (!emailPattern.test(email)) {
+        return res.status(400).json({ message: 'Invalid email format' });
+    }
 
     next();
 }
@@ -37,15 +43,17 @@ async function checkUser(req, res, next) {
     if (!token) return res.status(401).json({ message: 'You must be logged in to translate' });
 
     try {
-        const decoded = jwt.verify(token, JWT_SECRET);
+        const decoded = jwt.verify(token, requireJwtSecret());
         const user = await prisma.user.findUnique({ where: { id: decoded.userId } });
         if (!user) return res.status(401).json({ message: 'User not found' });
 
         req.currentUser = { id: user.id, name: user.name, email: user.email };
+        req.user = user;
         next();
     } catch (err) {
         console.error(err);
-        res.status(401).json({ message: 'Invalid or expired token' });
+        const status = err.statusCode || 401;
+        res.status(status).json({ message: status === 500 ? 'Server misconfigured' : 'Invalid or expired token' });
     }
 }
 

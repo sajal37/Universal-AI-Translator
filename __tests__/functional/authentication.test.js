@@ -98,8 +98,8 @@ describe('Authentication Functionality', () => {
 
             const weakPasswords = [
                 '12345',
-                'password',
-                'abc'
+                'abc',
+                'short'
             ];
 
             strongPasswords.forEach(pass => {

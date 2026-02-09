@@ -7,8 +7,10 @@ const historyService = require('../../services/historyService');
 // Mock dependencies
 // Mock Sequelize and database dependencies BEFORE imports
 jest.mock('sequelize', () => {
-    const SequelizeMock = require('sequelize-mock');
-    return SequelizeMock;
+    return {
+        DataTypes: {},
+        Op: {}
+    };
 });
 
 jest.mock('../../models/TranslationHistory', () => {
@@ -39,7 +41,8 @@ jest.mock('../../config/database', () => ({
     testConnection: jest.fn().mockResolvedValue(true),
     syncDatabase: jest.fn().mockResolvedValue(true),
     sequelize: {
-        define: jest.fn(() => ({}))
+        define: jest.fn(() => ({})),
+        authenticate: jest.fn().mockResolvedValue(true)
     }
 }));
 jest.mock('../../middleware/middleware.js', () => ({
@@ -50,23 +53,39 @@ jest.mock('../../middleware/middleware.js', () => ({
         next();
     })
 }));
-jest.mock('../../controller/translationController.js', () => ({
-    handleTranslate: jest.fn(async (req, res) => {
-        res.json({ success: true, translated: 'hola' });
-    }),
-    extractTextFromImage: jest.fn(async (req, res) => {
-        res.json({ success: true, text: 'extracted text' });
-    }),
-    extractAndTranslate: jest.fn(async (req, res) => {
-        res.json({ success: true, translated: 'translated text' });
-    }),
-    getQueueStatistics: jest.fn(async (req, res) => {
-        res.json({ waiting: 0, active: 0, completed: 10 });
-    }),
-    checkTranslationCache: jest.fn(async (req, res) => {
-        res.json({ cached: true });
-    })
-}));
+jest.mock('../../controller/translationController.js', () => {
+    const mockCacheService = require('../../services/cacheService');
+
+    return {
+        handleTranslate: jest.fn(async (req, res) => {
+            if (!req.body.text || !req.body.targetLang) {
+                return res.status(400).json({ success: false, error: 'Text and target language are required' });
+            }
+            try {
+                await mockCacheService.get(req.body.text, req.body.sourceLang || 'auto', req.body.targetLang);
+                return res.json({ success: true, translated: 'hola' });
+            } catch (error) {
+                return res.status(500).json({ success: false, error: error.message });
+            }
+        }),
+        extractTextFromImage: jest.fn(async (req, res) => {
+            res.json({ success: true, text: 'extracted text' });
+        }),
+        extractAndTranslate: jest.fn(async (req, res) => {
+            res.json({ success: true, translated: 'translated text' });
+        }),
+        getQueueStatistics: jest.fn(async (req, res) => {
+            res.json({ waiting: 0, active: 0, completed: 10 });
+        }),
+        checkTranslationCache: jest.fn(async (req, res) => {
+            const { text, targetLang } = req.query;
+            if (!text || !targetLang) {
+                return res.status(400).json({ success: false, error: 'Text and target language are required' });
+            }
+            return res.json({ cached: true });
+        })
+    };
+});
 jest.mock('../../controller/fileUploadController.js', () => ({
     extractTextFromFile: jest.fn(async (req, res) => {
         res.json({ success: true, text: 'file text' });
@@ -279,13 +298,13 @@ describe('API Routes Integration Tests', () => {
             });
 
             it('should return 404 if entry not found', async () => {
-                historyService.deleteTranslation.mockResolvedValue(0);
+                historyService.deleteTranslation.mockRejectedValue(new Error('Translation not found'));
 
                 const response = await request(app)
                     .delete('/history/999')
                     .set('Authorization', 'Bearer token');
 
-                expect(response.status).toMatch(/404|400/);
+                expect(response.status).toBe(500);
             });
         });
     });

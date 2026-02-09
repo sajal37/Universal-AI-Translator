@@ -10,6 +10,7 @@
     "test:functional": "jest --testPathPattern=__tests__/functional",
     "test:e2e": "jest --testPathPattern=__tests__/e2e",
     "test:all": "jest --coverage --verbose",
+    "dev": "nodemon server.js",
     "start": "node server.js"
   },
   "keywords": [],
@@ -18,20 +19,18 @@
   "description": "",
   "dependencies": {
     "@prisma/client": "^7.3.0",
-    "@vitalets/google-translate-api": "^9.2.1",
-    "@xenova/transformers": "^2.17.2",
     "adm-zip": "^0.5.16",
     "bcryptjs": "^3.0.3",
     "bull": "^4.16.5",
+    "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
+    "express-rate-limit": "^7.5.0",
     "fast-xml-parser": "^5.3.4",
-    "franc-min": "^6.2.0",
     "google-translate-api-x": "^10.7.2",
     "ioredis": "^5.9.2",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.0.2",
-    "nodemon": "^3.1.11",
     "pdf-parse": "^2.4.5",
     "pg": "^8.18.0",
     "sequelize": "^6.37.7",
@@ -44,6 +43,7 @@
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "jest": "^30.2.0",
+    "nodemon": "^3.1.11",
     "prisma": "^7.3.0",
     "supertest": "^7.2.2"
   }

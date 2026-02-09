@@ -42,7 +42,8 @@ describe('FileUploadController', () => {
         it('should return 400 if file type is not supported', async () => {
             req.file = {
                 mimetype: 'text/plain',
-                path: '/tmp/file.txt'
+                path: '/tmp/file.txt',
+                originalname: 'file.txt'
             };
 
             await extractTextFromFile(req, res);
@@ -50,7 +51,7 @@ describe('FileUploadController', () => {
             expect(res.status).toHaveBeenCalledWith(400);
             expect(res.json).toHaveBeenCalledWith({
                 success: false,
-                error: expect.stringContaining('Unsupported file type')
+                error: expect.stringContaining('Unsupported file format')
             });
         });
     });
@@ -72,7 +73,8 @@ describe('FileUploadController', () => {
         it('should return 400 if target language is missing', async () => {
             req.file = {
                 mimetype: 'image/png',
-                path: '/tmp/file.png'
+                path: '/tmp/file.png',
+                originalname: 'file.png'
             };
 
             await extractAndTranslateFile(req, res);

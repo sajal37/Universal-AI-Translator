@@ -3,6 +3,9 @@ let currentUser = null;
 let socket = null;
 const sourceTextArea = document.getElementById('sourceTextArea');
 const sourceCharCounter = document.getElementById('sourceCharCounter');
+let authRequired = false;
+let speechBaseText = '';
+let speechSeparator = '';
 
 // WebSocket connection flag
 let useWebSocket = true;
@@ -43,7 +46,7 @@ function bindUiEvents() {
     sourceTextArea.addEventListener('input', () => {
         const count = sourceTextArea.value.length;
         sourceCharCounter.textContent = `${count} / 5000`;
-        sourceCharCounter.style.color = count > 4500 ? 'rgba(255, 255, 255, 0.8)' : 'rgba(255, 255, 255, 0.4)';
+        sourceCharCounter.classList.toggle('is-warning', count > 4500);
         
         // Emit typing event via WebSocket
         if (socket && socket.connected && isAuthenticated) {
@@ -140,11 +143,18 @@ function hideAccountChip() {
 
 function openAuthLayer() {
     const overlay = document.getElementById('authLayer');
+    authRequired = true;
     overlay.classList.add('active');
     document.body.style.overflow = 'hidden';
 }
 
 function closeAuthLayer() {
+    if (authRequired && !isAuthenticated) {
+        alert('Please sign in to continue.');
+        return;
+    }
+
+    authRequired = false;
     const overlay = document.getElementById('authLayer');
     overlay.classList.remove('active');
     document.body.style.overflow = 'auto';
@@ -387,6 +397,7 @@ async function handleOcrUpload(event) {
         // Extract text and translate in one step
         const token = localStorage.getItem('token');
         const targetLanguage = document.getElementById('toLanguageSelect')?.value || 'en';
+        const sourceLanguage = document.getElementById('fromLanguageSelect')?.value || 'auto';
 
         translatedTextArea.value = 'Translating extracted text...';
 
@@ -398,7 +409,8 @@ async function handleOcrUpload(event) {
             },
             body: JSON.stringify({
                 imageData: base64Image,
-                targetLang: targetLanguage
+                targetLang: targetLanguage,
+                sourceLang: sourceLanguage
             })
         });
 
@@ -476,7 +488,8 @@ async function runTranslation() {
 
     // Use WebSocket if available and connected
     if (useWebSocket && socket && socket.connected) {
-        socket.emit('translate', { text: input, targetLang: targetLanguage });
+        const sourceLanguage = document.getElementById('fromLanguageSelect')?.value || 'auto';
+        socket.emit('translate', { text: input, targetLang: targetLanguage, sourceLang: sourceLanguage });
         return;
     }
 
@@ -494,7 +507,11 @@ async function runTranslation() {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}` 
             },
-            body: JSON.stringify({ text: input, targetLang: targetLanguage }) 
+            body: JSON.stringify({ 
+                text: input, 
+                targetLang: targetLanguage,
+                sourceLang: document.getElementById('fromLanguageSelect')?.value || 'auto'
+            }) 
         });
 
         const data = await response.json();
@@ -529,7 +546,7 @@ function clearWorkspaceText() {
     sourceTextArea.value = '';
     document.getElementById('translatedTextArea').value = '';
     sourceCharCounter.textContent = '0 / 5000';
-    sourceCharCounter.style.color = 'rgba(255, 255, 255, 0.4)';
+    sourceCharCounter.classList.remove('is-warning');
 }
 
 function copyTranslatedText() {
@@ -544,13 +561,11 @@ function copyTranslatedText() {
     if (output.value) {
         navigator.clipboard.writeText(output.value).then(() => {
             resultCopyBtn.textContent = 'Copied';
-            resultCopyBtn.style.background = 'rgba(255, 255, 255, 0.15)';
-            resultCopyBtn.style.color = '#ffffff';
+            resultCopyBtn.classList.add('copied');
             
             setTimeout(() => {
                 resultCopyBtn.textContent = 'Copy';
-                resultCopyBtn.style.background = 'rgba(255, 255, 255, 0.06)';
-                resultCopyBtn.style.color = 'rgba(255, 255, 255, 0.8)';
+                resultCopyBtn.classList.remove('copied');
             }, 2000);
         });
     }
@@ -571,6 +586,8 @@ function initializeSpeechRecognition() {
         
         recognition.onstart = () => {
             isListening = true;
+            speechBaseText = sourceTextArea.value.trimEnd();
+            speechSeparator = speechBaseText ? ' ' : '';
             const speechCaptureBtn = document.getElementById('speechCaptureBtn');
             speechCaptureBtn.classList.add('listening');
             speechCaptureBtn.title = 'Stop listening';
@@ -582,12 +599,14 @@ function initializeSpeechRecognition() {
                 .map(result => result.transcript)
                 .join('');
                 
-            sourceTextArea.value = transcript;
+            sourceTextArea.value = `${speechBaseText}${speechSeparator}${transcript}`;
             sourceTextArea.dispatchEvent(new Event('input'));
         };
         
         recognition.onend = () => {
             isListening = false;
+            speechBaseText = '';
+            speechSeparator = '';
             const speechCaptureBtn = document.getElementById('speechCaptureBtn');
             speechCaptureBtn.classList.remove('listening');
             speechCaptureBtn.title = 'Speech to text';

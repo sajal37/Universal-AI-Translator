@@ -2,13 +2,15 @@ require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const path = require('path');
+const cors = require('cors');
 const { Server } = require('socket.io');
 const routes = require('./routes/routes.js');
 const { initializeWebSocket } = require('./websocket/socketHandler.js');
 const { redisClient, redisSubscriber } = require('./config/redis.js');
-const { testConnection, syncDatabase } = require('./config/database.js');
+const { testConnection, syncDatabase, sequelize } = require('./config/database.js');
 const cacheService = require('./services/cacheService');
 const commonPhrases = require('./config/commonPhrases');
+const prisma = require('./config/prismaClient');
 
 const app = express();
 const server = http.createServer(app);
@@ -23,6 +25,15 @@ const io = new Server(server, {
 });
 
 // Middleware - Increase payload limit for image uploads
+const corsOriginEnv = process.env.CORS_ORIGIN;
+const corsOrigins = !corsOriginEnv || corsOriginEnv === '*'
+    ? '*'
+    : corsOriginEnv.split(',').map(origin => origin.trim());
+
+app.use(cors({
+    origin: corsOrigins,
+    credentials: false
+}));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -32,6 +43,16 @@ app.set('io', io);
 
 // Routes
 app.use('/', routes);
+
+// Global error handler
+app.use((err, req, res, next) => {
+    console.error('Unhandled error:', err);
+    const status = err.statusCode || 500;
+    res.status(status).json({
+        success: false,
+        error: status === 500 ? 'Server error' : err.message
+    });
+});
 
 // Initialize WebSocket handlers
 initializeWebSocket(io);
@@ -61,15 +82,28 @@ redisSubscriber.on('error', (err) => {
 });
 
 // Graceful shutdown
-process.on('SIGTERM', async () => {
-    console.log('SIGTERM received, closing connections...');
-    await redisClient.quit();
-    await redisSubscriber.quit();
+let shuttingDown = false;
+async function shutdown(signal) {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`${signal} received, closing connections...`);
+    try {
+        await redisClient.quit();
+        await redisSubscriber.quit();
+        await prisma.$disconnect();
+        await sequelize.close();
+    } catch (error) {
+        console.error('Shutdown error:', error);
+    }
+
     server.close(() => {
         console.log('Server closed');
         process.exit(0);
     });
-});
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 // Start server
 async function startServer() {

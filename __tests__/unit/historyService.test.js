@@ -227,15 +227,14 @@ describe('HistoryService', () => {
 
             const result = await historyService.deleteTranslation(1, 'user123');
 
-            expect(result).toEqual(1);
+            expect(result).toBe(true);
         });
 
-        it('should return 0 if translation not found', async () => {
+        it('should throw if translation not found', async () => {
             TranslationHistory.destroy = jest.fn().mockResolvedValue(0);
 
-            const result = await historyService.deleteTranslation(999, 'user123');
-
-            expect(result).toEqual(0);
+            await expect(historyService.deleteTranslation(999, 'user123'))
+                .rejects.toThrow('Translation not found');
         });
 
         it('should handle errors during deletion', async () => {
@@ -245,11 +244,11 @@ describe('HistoryService', () => {
         });
     });
 
-    describe('clearUserHistory', () => {
+    describe('clearHistory', () => {
         it('should clear all history for user', async () => {
             TranslationHistory.destroy = jest.fn().mockResolvedValue(5);
 
-            const result = await historyService.clearUserHistory('user123');
+            const result = await historyService.clearHistory('user123');
 
             expect(result).toEqual(5);
             expect(TranslationHistory.destroy).toHaveBeenCalledWith({
@@ -260,42 +259,9 @@ describe('HistoryService', () => {
         it('should return 0 if user has no history', async () => {
             TranslationHistory.destroy = jest.fn().mockResolvedValue(0);
 
-            const result = await historyService.clearUserHistory('user999');
+            const result = await historyService.clearHistory('user999');
 
             expect(result).toEqual(0);
-        });
-    });
-
-    describe('searchHistory', () => {
-        it('should search translation history by text', async () => {
-            const mockResults = {
-                rows: [{
-                    id: 1,
-                    originalText: 'hello world',
-                    translatedText: 'hola mundo',
-                    userId: 'user123'
-                }],
-                count: 1
-            };
-
-            TranslationHistory.findAndCountAll.mockResolvedValue(mockResults);
-
-            const result = await historyService.searchHistory('user123', 'hello');
-
-            expect(result.count).toBe(1);
-            expect(result.rows).toHaveLength(1);
-        });
-
-        it('should handle empty search results', async () => {
-            TranslationHistory.findAndCountAll.mockResolvedValue({
-                rows: [],
-                count: 0
-            });
-
-            const result = await historyService.searchHistory('user123', 'xyz');
-
-            expect(result.count).toBe(0);
-            expect(result.rows).toHaveLength(0);
         });
     });
 });

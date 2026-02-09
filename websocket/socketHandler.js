@@ -1,10 +1,8 @@
 const jwt = require('jsonwebtoken');
 const { redisPublisher, redisSubscriber } = require('../config/redis.js');
 const { addTranslationJob, translationQueue } = require('../queue/translationQueue.js');
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
-
-const JWT_SECRET = process.env.JWT_SECRET;
+const prisma = require('../config/prismaClient');
+const { requireJwtSecret } = require('../config/jwt');
 
 const connectedUsers = new Map();
 
@@ -37,7 +35,7 @@ console.log(`Client connected: ${socket.id}`);
 
 socket.on('authenticate', async (token) => {
 try {
-const decoded = jwt.verify(token, JWT_SECRET);
+const decoded = jwt.verify(token, requireJwtSecret());
 const user = await prisma.user.findUnique({
 where: { id: decoded.userId }
 });
@@ -64,7 +62,8 @@ socket.emit('authenticated', { success: false, message: 'User not found' });
 }
 } catch (error) {
 console.error('Authentication error:', error);
-socket.emit('authenticated', { success: false, message: 'Invalid token' });
+const message = error.statusCode === 500 ? 'Server misconfigured' : 'Invalid token';
+socket.emit('authenticated', { success: false, message });
 }
 });
 
@@ -74,7 +73,7 @@ socket.emit('translation:error', { message: 'Not authenticated' });
 return;
 }
 
-const { text, targetLang } = data;
+const { text, targetLang, sourceLang = 'auto' } = data;
 
 if (!text || !targetLang) {
 socket.emit('translation:error', { message: 'Text and target language required' });
@@ -90,6 +89,7 @@ try {
 const job = await addTranslationJob({
 text,
 targetLang,
+sourceLang,
 userId: socket.userId,
 socketId: socket.id,
 priority: 5

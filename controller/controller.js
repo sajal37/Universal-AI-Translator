@@ -1,9 +1,7 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../config/prismaClient');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-
-const JWT_SECRET = process.env.JWT_SECRET || "9f4a7d3a4c0e8a7d1d61caa42a87dfc1454c1a2c19f7075e69f49c842dbd8c3c"; 
+const { requireJwtSecret } = require('../config/jwt');
 
 async function signUp(req, res) {
     const { name, email, password } = req.body;
@@ -15,10 +13,15 @@ async function signUp(req, res) {
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const newUser = await prisma.user.create({
-            data: { name, email, password: hashedPassword }
+            data: { 
+                name, 
+                email, 
+                password: hashedPassword,
+                updatedAt: new Date()
+            }
         });
 
-        const token = jwt.sign({ userId: newUser.id }, JWT_SECRET, { expiresIn: '1h' });
+        const token = jwt.sign({ userId: newUser.id }, requireJwtSecret(), { expiresIn: '1h' });
 
         res.status(201).json({ 
             message: 'User created', 
@@ -40,7 +43,7 @@ async function signIn(req, res) {
         const validPassword = await bcrypt.compare(password, user.password);
         if (!validPassword) return res.status(401).json({ message: 'Invalid credentials' });
 
-        const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '1h' });
+        const token = jwt.sign({ userId: user.id }, requireJwtSecret(), { expiresIn: '1h' });
 
         res.status(200).json({ 
             message: 'Login successful', 
@@ -53,4 +56,4 @@ async function signIn(req, res) {
     }
 }
 
-module.exports = { signUp, signIn, JWT_SECRET };
+module.exports = { signUp, signIn };

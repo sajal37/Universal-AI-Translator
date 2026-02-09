@@ -11,6 +11,11 @@ process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://test:test@l
 // Global test timeout
 jest.setTimeout(10000);
 
+// Default mocks for external services to avoid open handles
+jest.mock('ioredis');
+jest.mock('bull');
+jest.mock('pdf-parse');
+
 // Suppress console warnings during tests (optional)
 const originalWarn = console.warn;
 console.warn = (...args) => {

@@ -53,24 +53,24 @@ describe('SocketHandler', () => {
     });
 
     describe('Socket Events', () => {
-        it('should handle translation:start event', () => {
+        it('should handle translate event', () => {
             initializeWebSocket(mockIo);
 
-            const startHandler = mockSocket.on.mock.calls.find(
-                call => call[0] === 'translation:start'
+            const translateHandler = mockSocket.on.mock.calls.find(
+                call => call[0] === 'translate'
             );
 
-            expect(startHandler).toBeDefined();
+            expect(translateHandler).toBeDefined();
         });
 
-        it('should handle translation:cancel event', () => {
+        it('should handle authenticate event', () => {
             initializeWebSocket(mockIo);
 
-            const cancelHandler = mockSocket.on.mock.calls.find(
-                call => call[0] === 'translation:cancel'
+            const authHandler = mockSocket.on.mock.calls.find(
+                call => call[0] === 'authenticate'
             );
 
-            expect(cancelHandler).toBeDefined();
+            expect(authHandler).toBeDefined();
         });
     });
 });

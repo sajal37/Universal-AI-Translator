@@ -8,11 +8,16 @@ jest.mock('sequelize');
 jest.mock('../../config/database', () => ({ sequelize: { define: jest.fn() } }));
 jest.mock('../../models/TranslationHistory');
 jest.mock('../../config/redis');
+jest.mock('../../services/cacheService');
+jest.mock('../../services/historyService');
+jest.mock('../../queue/translationQueue');
 jest.mock('google-translate-api-x', () => jest.fn());
 
 const translate = require('google-translate-api-x');
 const cacheService = require('../../services/cacheService');
 const historyService = require('../../services/historyService');
+const { addTranslationJob } = require('../../queue/translationQueue');
+const translationController = require('../../controller/translationController');
 
 describe('Translation Functionality', () => {
     beforeEach(() => {
@@ -88,31 +93,43 @@ describe('Translation Functionality', () => {
     });
 
     describe('Translation with Cache Integration', () => {
-        it('should cache successful translations', async () => {
-            const text = 'Hello';
-            const translated = 'Hola';
-            
-            cacheService.get = jest.fn().mockResolvedValue(null);
-            cacheService.set = jest.fn().mockResolvedValue(true);
-            translate.mockResolvedValue({ text: translated });
+        it('should enqueue translation when cache is empty', async () => {
+            const req = {
+                body: { text: 'Hello', targetLang: 'es', sourceLang: 'en' },
+                user: { id: 'user123' }
+            };
+            const res = { status: jest.fn().mockReturnThis(), json: jest.fn().mockReturnThis() };
 
-            await translate(text, { from: 'en', to: 'es' });
+            cacheService.get.mockResolvedValue(null);
+            addTranslationJob.mockResolvedValue({ id: 'job123' });
 
-            expect(cacheService.set).toHaveBeenCalled();
+            await translationController.handleTranslate(req, res);
+
+            expect(addTranslationJob).toHaveBeenCalled();
         });
 
-        it('should retrieve from cache on repeated translations', async () => {
-            const cachedData = {
-                translated: 'Hola',
-                cached: true
+        it('should return cached translation when available', async () => {
+            const req = {
+                body: { text: 'Hello', targetLang: 'es', sourceLang: 'en' },
+                user: { id: 'user123' }
             };
+            const res = { status: jest.fn().mockReturnThis(), json: jest.fn().mockReturnThis() };
 
-            cacheService.get = jest.fn().mockResolvedValue(cachedData);
+            cacheService.get.mockResolvedValue({
+                translated: 'Hola',
+                sourceLang: 'en',
+                cachedAt: Date.now()
+            });
+            historyService.saveTranslation.mockResolvedValue({ id: 1 });
 
-            const result = await cacheService.get('Hello', 'en', 'es');
+            await translationController.handleTranslate(req, res);
 
-            expect(result.cached).toBe(true);
-            expect(result.translated).toBe('Hola');
+            expect(res.json).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    success: true,
+                    cached: true
+                })
+            );
         });
     });
 

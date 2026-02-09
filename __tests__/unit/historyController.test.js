@@ -8,7 +8,7 @@ jest.mock('../../services/historyService');
 const historyService = require('../../services/historyService');
 const {
     getHistory,
-    getTranslationById,
+    getTranslation,
     deleteTranslation,
     toggleFavorite
 } = require('../../controller/historyController');
@@ -63,12 +63,12 @@ describe('HistoryController', () => {
             expect(res.status).toHaveBeenCalledWith(500);
             expect(res.json).toHaveBeenCalledWith({
                 success: false,
-                error: expect.stringContaining('Failed to retrieve history')
+                error: 'Database error'
             });
         });
     });
 
-    describe('getTranslationById', () => {
+    describe('getTranslation', () => {
         it('should retrieve a single translation by ID', async () => {
             const mockTranslation = {
                 id: 1,
@@ -79,7 +79,7 @@ describe('HistoryController', () => {
             req.params.id = '1';
             historyService.getTranslationById.mockResolvedValue(mockTranslation);
 
-            await getTranslationById(req, res);
+            await getTranslation(req, res);
 
             expect(historyService.getTranslationById).toHaveBeenCalledWith('1', 'user123');
             expect(res.json).toHaveBeenCalledWith({
@@ -92,7 +92,7 @@ describe('HistoryController', () => {
             req.params.id = '999';
             historyService.getTranslationById.mockResolvedValue(null);
 
-            await getTranslationById(req, res);
+            await getTranslation(req, res);
 
             expect(res.status).toHaveBeenCalledWith(404);
             expect(res.json).toHaveBeenCalledWith({

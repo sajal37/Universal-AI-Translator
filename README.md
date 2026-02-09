@@ -11,6 +11,7 @@ Universal AI Translator is a full-stack translation app with authentication, rea
 - Redis caching for faster repeated translations
 - Translation history, favorites, and saved phrase management
 - Clean responsive UI with dark/light themes
+- Rate limiting and CORS support for API hardening
 
 ## Tech Stack
 
@@ -44,6 +45,7 @@ Create `.env` in the project root:
 # App
 PORT=3000
 JWT_SECRET=replace_with_a_long_random_secret
+CORS_ORIGIN=http://localhost:3000
 
 # Prisma (used by auth/User model)
 DATABASE_URL=postgresql://postgres:password@localhost:5432/universal_translator
@@ -68,6 +70,8 @@ npx prisma generate
 npx prisma db push
 ```
 
+If your database already exists, ensure the Prisma `User` model (string CUID id + `updatedAt`) matches the DB schema before running the app.
+
 Start the server:
 
 ```bash
@@ -80,6 +84,7 @@ Health check: `http://localhost:3000/health`
 ## Available Scripts
 
 - `npm start` - Run server
+- `npm run dev` - Run server with nodemon
 - `npm test` - Run all tests with coverage
 - `npm run test:watch` - Run Jest in watch mode
 - `npm run test:unit` - Run unit tests
@@ -133,6 +138,7 @@ __tests__/       Unit/integration/functional/e2e tests
 - If dropdown options appear blank, hard refresh the page (`Ctrl+F5`) to clear cached CSS.
 - If `/health` is degraded, verify PostgreSQL and Redis are reachable with your `.env` values.
 - If Prisma fails, re-run `npx prisma generate` and `npx prisma db push`.
+- If `/signup` or `/sign-in` is rate limited, wait a few minutes and try again.
 
 ## Documentation
 

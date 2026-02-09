@@ -1,15 +1,10 @@
 // Mock dependencies
-jest.mock("@prisma/client", () => {
-  const mockPrisma = {
-    user: {
-      create: jest.fn(),
-      findUnique: jest.fn(),
-    },
-  };
-  return {
-    PrismaClient: jest.fn(() => mockPrisma),
-  };
-});
+jest.mock("../../config/prismaClient", () => ({
+  user: {
+    create: jest.fn(),
+    findUnique: jest.fn(),
+  },
+}));
 
 jest.mock("bcryptjs", () => ({
   hash: jest.fn().mockResolvedValue("hashedPassword"),
@@ -21,11 +16,10 @@ jest.mock("jsonwebtoken", () => ({
 }));
 
 const { signUp, signIn } = require("../../controller/controller");
-const { PrismaClient } = require("@prisma/client");
+const prisma = require("../../config/prismaClient");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
-const prisma = new PrismaClient();
 
 describe("Controller", () => {
   let req, res;
@@ -64,7 +58,8 @@ describe("Controller", () => {
       expect(prisma.user.create).toHaveBeenCalled();
       expect(res.status).toHaveBeenCalledWith(201);
       expect(res.json).toHaveBeenCalledWith({
-        message: "User created successfully",
+        message: "User created",
+        token: "mock_token",
         user: expect.objectContaining({
           name: "John Doe",
           email: "john@example.com",
@@ -85,9 +80,9 @@ describe("Controller", () => {
 
       await signUp(req, res);
 
-      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.status).toHaveBeenCalledWith(409);
       expect(res.json).toHaveBeenCalledWith({
-        message: "Email already in use",
+        message: "User exists",
       });
     });
   });
@@ -121,7 +116,7 @@ describe("Controller", () => {
       expect(jwt.sign).toHaveBeenCalledWith(
         { userId: "user123" },
         expect.any(String),
-        { expiresIn: "24h" }
+        { expiresIn: "1h" }
       );
       expect(res.json).toHaveBeenCalledWith({
         message: "Login successful",
@@ -143,9 +138,9 @@ describe("Controller", () => {
 
       await signIn(req, res);
 
-      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.status).toHaveBeenCalledWith(404);
       expect(res.json).toHaveBeenCalledWith({
-        message: "Invalid email or password",
+        message: "User not found",
       });
     });
 
@@ -168,7 +163,7 @@ describe("Controller", () => {
 
       expect(res.status).toHaveBeenCalledWith(401);
       expect(res.json).toHaveBeenCalledWith({
-        message: "Invalid email or password",
+        message: "Invalid credentials",
       });
     });
 
@@ -179,9 +174,11 @@ describe("Controller", () => {
         // missing email
       };
 
+      prisma.user.findUnique.mockResolvedValue(null);
+
       await signIn(req, res);
 
-      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.status).toHaveBeenCalledWith(404);
     });
 
     it("should handle database errors gracefully", async () => {

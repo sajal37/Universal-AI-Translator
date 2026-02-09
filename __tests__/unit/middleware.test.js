@@ -4,7 +4,7 @@ const {
   checkUser,
 } = require("../../middleware/middleware");
 const jwt = require("jsonwebtoken");
-const { PrismaClient } = require("@prisma/client");
+const prisma = require("../../config/prismaClient");
 
 /**
  * Middleware Test Suite
@@ -15,19 +15,12 @@ const { PrismaClient } = require("@prisma/client");
  * - checkUser: Verifies JWT token and user authentication
  */
 
-// Mock PrismaClient
-jest.mock("@prisma/client", () => {
-  const mockPrisma = {
-    user: {
-      findUnique: jest.fn(),
-    },
-  };
-  return {
-    PrismaClient: jest.fn(() => mockPrisma),
-  };
-});
-
-const mockPrisma = new PrismaClient();
+// Mock Prisma client singleton
+jest.mock("../../config/prismaClient", () => ({
+  user: {
+    findUnique: jest.fn(),
+  },
+}));
 
 describe("Middleware", () => {
   let req, res, next;
@@ -92,6 +85,23 @@ describe("Middleware", () => {
       expect(next).not.toHaveBeenCalled();
     });
 
+    it("should return 400 if email is invalid", () => {
+      req.body = {
+        name: "John Doe",
+        email: "invalid-email",
+        password: "password123",
+        confirmPassword: "password123",
+      };
+
+      checkSignUp(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({
+        message: "Invalid email format",
+      });
+      expect(next).not.toHaveBeenCalled();
+    });
+
     it("should return 400 if passwords do not match", () => {
       req.body = {
         name: "John Doe",
@@ -150,12 +160,25 @@ describe("Middleware", () => {
       });
       expect(next).not.toHaveBeenCalled();
     });
+
+    it("should return 400 if email is invalid", () => {
+      req.body = {
+        email: "invalid-email",
+        password: "password123",
+      };
+
+      checkSignIn(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({
+        message: "Invalid email format",
+      });
+      expect(next).not.toHaveBeenCalled();
+    });
   });
 
   describe("checkUser", () => {
-    const JWT_SECRET =
-      process.env.JWT_SECRET ||
-      "9f4a7d3a4c0e8a7d1d61caa42a87dfc1454c1a2c19f7075e69f49c842dbd8c3c";
+    const JWT_SECRET = process.env.JWT_SECRET;
 
     it("should call next() with valid token and existing user", async () => {
       const token = jwt.sign({ userId: "user123" }, JWT_SECRET);
@@ -167,11 +190,11 @@ describe("Middleware", () => {
         email: "john@example.com",
       };
 
-      mockPrisma.user.findUnique.mockResolvedValue(mockUser);
+      prisma.user.findUnique.mockResolvedValue(mockUser);
 
       await checkUser(req, res, next);
 
-      expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
+      expect(prisma.user.findUnique).toHaveBeenCalledWith({
         where: { id: "user123" },
       });
       expect(req.currentUser).toEqual({
@@ -179,6 +202,7 @@ describe("Middleware", () => {
         name: "John Doe",
         email: "john@example.com",
       });
+      expect(req.user).toEqual(mockUser);
       expect(next).toHaveBeenCalled();
     });
 
@@ -220,7 +244,7 @@ describe("Middleware", () => {
       const token = jwt.sign({ userId: "nonexistent" }, JWT_SECRET);
       req.headers["authorization"] = `Bearer ${token}`;
 
-      mockPrisma.user.findUnique.mockResolvedValue(null);
+      prisma.user.findUnique.mockResolvedValue(null);
 
       await checkUser(req, res, next);
 

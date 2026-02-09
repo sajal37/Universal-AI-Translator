@@ -18,24 +18,25 @@ const { getFailedJobs, retryFailedJob, getQueueStats } = require('../queue/trans
 const cacheRoutes = require('./cacheRoutes');
 const historyRoutes = require('./historyRoutes');
 const upload = require('../config/multerConfig');
+const { authLimiter, translateLimiter } = require('../config/rateLimiters');
 
 // Increase payload limit for OCR endpoints (for base64 images)
 const jsonParserLarge = express.json({ limit: '10mb' });
 
 // Auth routes
-router.post('/signup', checkSignUp, signUp);
-router.post('/sign-in', checkSignIn, signIn);
+router.post('/signup', authLimiter, checkSignUp, signUp);
+router.post('/sign-in', authLimiter, checkSignIn, signIn);
 
 // Translation routes
-router.post('/translate', checkUser, handleTranslate);
+router.post('/translate', translateLimiter, checkUser, handleTranslate);
 
 // Old image-based OCR routes (keep for backward compatibility)
-router.post('/ocr/extract', jsonParserLarge, checkUser, extractTextFromImage);
-router.post('/ocr/translate', jsonParserLarge, checkUser, extractAndTranslate);
+router.post('/ocr/extract', translateLimiter, jsonParserLarge, checkUser, extractTextFromImage);
+router.post('/ocr/translate', translateLimiter, jsonParserLarge, checkUser, extractAndTranslate);
 
 // NEW: File-based OCR routes (better accuracy)
-router.post('/ocr/file/extract', checkUser, upload.single('file'), extractTextFromFile);
-router.post('/ocr/file/translate', checkUser, upload.single('file'), extractAndTranslateFile);
+router.post('/ocr/file/extract', translateLimiter, checkUser, upload.single('file'), extractTextFromFile);
+router.post('/ocr/file/translate', translateLimiter, checkUser, upload.single('file'), extractAndTranslateFile);
 
 router.get('/queue/stats', checkUser, getQueueStatistics);
 router.get('/translation/cache', checkUser, checkTranslationCache);

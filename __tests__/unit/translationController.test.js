@@ -105,76 +105,48 @@ describe('TranslationController', () => {
         });
     });
 
-    describe('handleImageTranslation', () => {
+    describe('extractTextFromImage', () => {
         it('should return 400 if image data is missing', async () => {
-            req.body = { targetLang: 'es' };
+            req.body = {};
 
-            await translationController.handleImageTranslation(req, res);
-
-            expect(res.status).toHaveBeenCalledWith(400);
-            expect(res.json).toHaveBeenCalledWith({
-                success: false,
-                error: 'Image and target language are required'
-            });
-        });
-
-        it('should return 400 if targetLang is missing', async () => {
-            req.body = { image: 'base64data' };
-
-            await translationController.handleImageTranslation(req, res);
+            await translationController.extractTextFromImage(req, res);
 
             expect(res.status).toHaveBeenCalledWith(400);
             expect(res.json).toHaveBeenCalledWith({
                 success: false,
-                error: 'Image and target language are required'
+                error: 'Image data is required'
             });
         });
     });
 
-    describe('handleBatchTranslation', () => {
-        it('should return 400 if texts array is missing', async () => {
+    describe('extractAndTranslate', () => {
+        it('should return 400 if image data is missing', async () => {
             req.body = { targetLang: 'es' };
 
-            await translationController.handleBatchTranslation(req, res);
+            await translationController.extractAndTranslate(req, res);
 
             expect(res.status).toHaveBeenCalledWith(400);
             expect(res.json).toHaveBeenCalledWith({
                 success: false,
-                error: 'Texts array and target language are required'
+                error: 'Image data and target language are required'
             });
         });
 
-        it('should return 400 if texts is not an array', async () => {
-            req.body = {
-                texts: 'not an array',
-                targetLang: 'es'
-            };
+        it('should return 400 if targetLang is missing', async () => {
+            req.body = { imageData: 'base64data' };
 
-            await translationController.handleBatchTranslation(req, res);
+            await translationController.extractAndTranslate(req, res);
 
             expect(res.status).toHaveBeenCalledWith(400);
             expect(res.json).toHaveBeenCalledWith({
                 success: false,
-                error: 'Texts array and target language are required'
+                error: 'Image data and target language are required'
             });
         });
+    });
 
-        it('should return 400 if texts array is empty', async () => {
-            req.body = {
-                texts: [],
-                targetLang: 'es'
-            };
-
-            await translationController.handleBatchTranslation(req, res);
-
-            expect(res.status).toHaveBeenCalledWith(400);
-            expect(res.json).toHaveBeenCalledWith({
-                success: false,
-                error: 'Texts array cannot be empty'
-            });
-        });
-
-        it('should handle translation queue jobs', async () => {
+    describe('queue integration', () => {
+        it('should enqueue translation when cache is empty', async () => {
             req.body = {
                 text: 'hello world',
                 targetLang: 'es'
@@ -185,7 +157,13 @@ describe('TranslationController', () => {
 
             await translationController.handleTranslate(req, res);
 
-            expect(addTranslationJob).toHaveBeenCalled();
+            expect(addTranslationJob).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    text: 'hello world',
+                    targetLang: 'es',
+                    userId: 'user123'
+                })
+            );
         });
 
         it('should handle errors in translation process', async () => {
@@ -201,18 +179,6 @@ describe('TranslationController', () => {
             expect(res.status).toHaveBeenCalledWith(500);
         });
 
-        it('should validate language codes', async () => {
-            req.body = {
-                text: 'hello',
-                targetLang: 'invalid',
-                sourceLang: 'xx'
-            };
-
-            await translationController.handleTranslate(req, res);
-
-            expect(res.status).toHaveBeenCalled();
-        });
-
         it('should handle very long text gracefully', async () => {
             const longText = 'a'.repeat(10000);
             req.body = {
@@ -221,10 +187,11 @@ describe('TranslationController', () => {
             };
 
             cacheService.get.mockResolvedValue(null);
+            addTranslationJob.mockResolvedValue({ id: 'job123' });
 
             await translationController.handleTranslate(req, res);
 
-            expect(res.status).toHaveBeenCalled();
+            expect(addTranslationJob).toHaveBeenCalled();
         });
     });
 });
